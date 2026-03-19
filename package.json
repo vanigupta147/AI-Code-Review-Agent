@@ -1,0 +1,15 @@
+{
+  "name": "ai-code-review-agent",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "cd backend && python -m uvicorn main:app --reload --port 3001",
+    "install:all": "npm install && npm install -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "frontend"
+  ]
+}
