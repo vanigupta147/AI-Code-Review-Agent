@@ -19,6 +19,7 @@ export function CodeEditor({
 
   return (
     <textarea
+      id="code-editor"
       className="code-editor"
       value={value}
       onChange={handleChange}

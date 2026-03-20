@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { Finding, ReviewReport } from "../types/review";
 
 interface ReportPanelProps {
@@ -11,7 +12,7 @@ const severityClass: Record<string, string> = {
   suggestion: "severity-suggestion",
 };
 
-export function ReportPanel({
+export const ReportPanel = memo(function ReportPanel({
   report,
   onApplySuggestion,
 }: ReportPanelProps) {
@@ -63,4 +64,4 @@ export function ReportPanel({
       )}
     </section>
   );
-}
+});

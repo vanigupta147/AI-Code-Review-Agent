@@ -5,7 +5,7 @@ On-demand code review: paste a snippet, get structured feedback (issues, suggest
 ## Structure
 
 - **`backend/`** — Python (FastAPI). `POST /review` accepts `{ code, language }` and returns a review report (LLM-based).
-- **`frontend/`** — React + TypeScript + Vite. Code editor, language selector, Review button, report panel with optional "Apply" for suggestions.
+- **`frontend/`** — React + TypeScript + Vite. Code editor, **file upload** (loads into editor + auto language from extension), language selector, Review button, report panel with optional "Apply" for suggestions.
 - **`docs/APPROACH.md`** — Design: runtime vs compile-time, FE scope, phases.
 
 ## Quick start
@@ -33,7 +33,7 @@ cp ../.env.example .env
 pip install -r requirements.txt
 python -m uvicorn main:app --reload --port 3001
 ```
-API runs at **http://localhost:3001**. Endpoints: `GET /health`, `POST /review`.
+API runs at **http://localhost:3001**. Endpoints: `GET /health`, `POST /review` (JSON body), `POST /review/upload` (multipart: `file` + form field `language`, UTF-8 text, max 1 MB).
 
 **Frontend:**
 ```bash
@@ -46,8 +46,9 @@ App runs at **http://localhost:3000**. Vite proxies `/api` to the backend, so no
 ### 3. Use
 
 1. Open http://localhost:3000
-2. Paste code, choose language, click **Review**
-3. See findings (severity, line, message, suggestion); use **Apply** to insert a suggestion into the editor
+2. Paste code **or** click **Upload file** (`.js`, `.ts`, `.py`, etc.); language is inferred from the extension when possible
+3. Click **Review**
+4. See findings (severity, line, message, suggestion); use **Apply** to update the editor
 
 ### Troubleshooting: "http proxy error: /review" or ECONNREFUSED
 

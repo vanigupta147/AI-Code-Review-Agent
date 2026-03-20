@@ -5,11 +5,9 @@ import httpx
 
 from models import Finding, ReviewReport
 
-# Ollama defaults: base URL, model name, and timeout (seconds)
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "300"))
-
 
 SYSTEM_PROMPT = """You are a code review assistant. Review the provided code and return a JSON object with this exact shape (no markdown, no extra text):
 {
@@ -34,6 +32,36 @@ Rules:
 - Return only valid JSON, no code fences or explanation."""
 
 
+def _strip_json_fence(raw: str) -> str:
+    if not raw.startswith("```"):
+        return raw
+    lines = raw.split("\n")
+    if lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines)
+
+
+def _findings_from_payload(data: dict) -> list[Finding]:
+    findings = data.get("findings") or []
+    out: list[Finding] = []
+    for f in findings:
+        if not isinstance(f, dict):
+            continue
+        out.append(
+            Finding(
+                line=f.get("line", 1),
+                severity=f.get("severity", "suggestion"),
+                category=f.get("category", "other"),
+                message=f.get("message", ""),
+                suggestion=f.get("suggestion"),
+                rule_source="llm",
+            )
+        )
+    return out
+
+
 def review_with_llm(code: str, language: str) -> ReviewReport:
     payload = {
         "model": OLLAMA_MODEL,
@@ -49,45 +77,19 @@ def review_with_llm(code: str, language: str) -> ReviewReport:
         "options": {"temperature": 0.1},
     }
 
+    url = f"{OLLAMA_BASE_URL}/api/chat"
     with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
-        resp = client.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
-            json=payload,
-        )
+        resp = client.post(url, json=payload)
         resp.raise_for_status()
+        body = resp.json()
 
-    body = resp.json()
-    raw = (body.get("message") or {}).get("content") or ""
-    raw = raw.strip()
+    raw = ((body.get("message") or {}).get("content") or "").strip()
     if not raw:
         raise ValueError("Empty LLM response")
 
-    # Ollama may wrap JSON in markdown code blocks; strip them
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        raw = "\n".join(lines)
-
+    raw = _strip_json_fence(raw)
     data = json.loads(raw)
-    findings = data.get("findings") or []
+    findings = _findings_from_payload(data)
     summary = data.get("summary") or f"{len(findings)} issues found"
 
-    out_findings = []
-    for f in findings:
-        if not isinstance(f, dict):
-            continue
-        out_findings.append(
-            Finding(
-                line=f.get("line", 1),
-                severity=f.get("severity", "suggestion"),
-                category=f.get("category", "other"),
-                message=f.get("message", ""),
-                suggestion=f.get("suggestion"),
-                rule_source="llm",
-            )
-        )
-
-    return ReviewReport(summary=summary, findings=out_findings)
+    return ReviewReport(summary=summary, findings=findings)
