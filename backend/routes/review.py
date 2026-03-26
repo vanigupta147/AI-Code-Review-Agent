@@ -1,6 +1,7 @@
 import asyncio
 import traceback
 
+import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from models import GithubUrlRequest, ReviewReport, ReviewRequest
@@ -30,6 +31,25 @@ async def _review_async(body: ReviewRequest) -> ReviewReport:
     """Run blocking LLM work in a thread so the event loop stays responsive."""
     try:
         return await asyncio.to_thread(run_review, body)
+    except httpx.ConnectError as err:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Cannot reach Ollama. Start it (e.g. `ollama serve`) and check "
+                "OLLAMA_BASE_URL in backend/.env."
+            ),
+        ) from err
+    except httpx.TimeoutException as err:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "LLM request timed out. Try a smaller PR diff, a faster model, or in "
+                "backend/.env set OLLAMA_TIMEOUT=1800 (or higher). Use OLLAMA_TIMEOUT=0 "
+                "for no read limit (local Ollama only)."
+            ),
+        ) from err
     except Exception as err:  # noqa: BLE001
         traceback.print_exc()
         raw = str(err)

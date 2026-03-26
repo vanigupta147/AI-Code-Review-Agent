@@ -7,7 +7,25 @@ from models import Finding, ReviewReport
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
-OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "300"))
+
+
+def _ollama_httpx_timeout() -> httpx.Timeout:
+    """Read timeout for Ollama /api/chat. Large PR diffs can take many minutes locally."""
+    raw = (os.environ.get("OLLAMA_TIMEOUT") or "900").strip()
+    if raw.lower() in ("0", "-1", "none", "unlimited"):
+        return httpx.Timeout(
+            connect=30.0,
+            read=None,
+            write=300.0,
+            pool=None,
+        )
+    seconds = float(raw)
+    return httpx.Timeout(
+        connect=30.0,
+        read=seconds,
+        write=300.0,
+        pool=seconds,
+    )
 
 DIFF_SYSTEM_PROMPT = """You are a code review assistant reviewing a unified diff (git patch). Focus on what changed: bugs, security, regressions, API breaks, tests, and style in the new/changed lines. Return a JSON object with this exact shape (no markdown, no extra text):
 {
@@ -102,7 +120,7 @@ def review_with_llm(
     }
 
     url = f"{OLLAMA_BASE_URL}/api/chat"
-    with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
+    with httpx.Client(timeout=_ollama_httpx_timeout()) as client:
         resp = client.post(url, json=payload)
         resp.raise_for_status()
         body = resp.json()
