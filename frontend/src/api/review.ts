@@ -36,6 +36,20 @@ export async function submitReview(
   return res.json() as Promise<ReviewReport>;
 }
 
+/** Fetch unified diff from a GitHub PR, commit, or compare URL and review via the API. */
+export async function submitReviewGithub(url: string): Promise<ReviewReport> {
+  const res = await fetch(`${API_BASE}/review/github`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: url.trim() }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(parseJsonError(err, res.statusText));
+  }
+  return res.json() as Promise<ReviewReport>;
+}
+
 /** Upload a file for review (multipart). Backend reads UTF-8 text. */
 export async function submitReviewUpload(
   file: File,

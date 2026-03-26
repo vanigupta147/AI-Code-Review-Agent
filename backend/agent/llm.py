@@ -9,6 +9,26 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").rs
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "300"))
 
+DIFF_SYSTEM_PROMPT = """You are a code review assistant reviewing a unified diff (git patch). Focus on what changed: bugs, security, regressions, API breaks, tests, and style in the new/changed lines. Return a JSON object with this exact shape (no markdown, no extra text):
+{
+  "summary": "Brief one-line summary (e.g. '3 issues in the diff')",
+  "findings": [
+    {
+      "line": 1,
+      "severity": "error" | "warning" | "suggestion",
+      "category": "style" | "security" | "best-practice" | "readability" | "performance" | "bug-risk" | "other",
+      "message": "Short description of the issue",
+      "suggestion": "Concrete fix or recommendation"
+    }
+  ]
+}
+
+Rules:
+- Line numbers refer to the line number in the unified diff text provided (1-based, counting from the start of the diff).
+- List ALL issues you find (up to 30). If the diff looks fine, return empty findings and summary "No issues found".
+- severity: "error" for bugs/security, "warning" for likely issues, "suggestion" for improvements.
+- Return only valid JSON, no code fences or explanation."""
+
 SYSTEM_PROMPT = """You are a code review assistant. Review the provided code and return a JSON object with this exact shape (no markdown, no extra text):
 {
   "summary": "Brief one-line summary (e.g. '5 issues found')",
@@ -62,14 +82,18 @@ def _findings_from_payload(data: dict) -> list[Finding]:
     return out
 
 
-def review_with_llm(code: str, language: str) -> ReviewReport:
+def review_with_llm(
+    code: str, language: str, *, input_kind: str = "code"
+) -> ReviewReport:
+    system = DIFF_SYSTEM_PROMPT if input_kind == "diff" else SYSTEM_PROMPT
+    block_label = "Unified diff" if input_kind == "diff" else "Code"
     payload = {
         "model": OLLAMA_MODEL,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             {
                 "role": "user",
-                "content": f"Language: {language}\n\nCode:\n```\n{code}\n```",
+                "content": f"Language: {language}\n\n{block_label}:\n```\n{code}\n```",
             },
         ],
         "stream": False,

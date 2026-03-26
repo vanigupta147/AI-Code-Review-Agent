@@ -18,4 +18,6 @@ export interface ReviewRequest {
   code: string;
   language: string;
   filename?: string;
+  /** When "diff", `code` is a unified diff (patch). */
+  input_kind?: "code" | "diff";
 }

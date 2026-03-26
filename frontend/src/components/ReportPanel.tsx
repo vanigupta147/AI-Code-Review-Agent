@@ -59,7 +59,9 @@ export const ReportPanel = memo(function ReportPanel({
       </ul>
       {report.findings.length > 0 && (
         <p className="report-panel-footer">
-          Apply fixes above, or run Review again after editing your code.
+          {onApplySuggestion
+            ? "Apply fixes above, or run Review again after editing your code."
+            : "Run Review again after updating the diff or URL."}
         </p>
       )}
     </section>
