@@ -3,12 +3,14 @@ import traceback
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from models import ReviewReport, ReviewRequest
+from models import GithubUrlRequest, ReviewReport, ReviewRequest
 from agent.review_agent import run_review
+from github_diff import fetch_github_diff
 
 router = APIRouter(prefix="/review", tags=["review"])
 
 MAX_UPLOAD_BYTES = 1024 * 1024  # 1 MB
+MAX_DIFF_CHARS = 500_000  # guardrail for pasted/fetched unified diffs
 
 _QUOTA_MARKERS = (
     "quota",
@@ -47,7 +49,31 @@ async def post_review(body: ReviewRequest) -> ReviewReport:
             status_code=400,
             detail="Missing or empty 'code' in request body.",
         )
+    if body.input_kind == "diff" and len(body.code) > MAX_DIFF_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Diff too large (max {MAX_DIFF_CHARS} characters).",
+        )
     return await _review_async(body)
+
+
+@router.post("/github", response_model=ReviewReport)
+async def post_review_github(body: GithubUrlRequest) -> ReviewReport:
+    """Fetch unified diff for a PR, commit, or compare URL and run the same review pipeline."""
+    url = (body.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing or empty 'url'.")
+    try:
+        diff = await asyncio.to_thread(fetch_github_diff, url)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    if len(diff) > MAX_DIFF_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Fetched diff too large (max {MAX_DIFF_CHARS} characters).",
+        )
+    req = ReviewRequest(code=diff, language="diff", input_kind="diff")
+    return await _review_async(req)
 
 
 @router.post("/upload", response_model=ReviewReport)

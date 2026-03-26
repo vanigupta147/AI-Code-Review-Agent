@@ -24,3 +24,13 @@ class ReviewRequest(BaseModel):
     code: str
     language: str = "javascript"
     filename: Optional[str] = None
+    input_kind: Literal["code", "diff"] = Field(
+        default="code",
+        description="When 'diff', the payload is a unified diff (patch), not plain source.",
+    )
+
+
+class GithubUrlRequest(BaseModel):
+    """Fetch unified diff from a GitHub PR, commit, or compare URL via the REST API."""
+
+    url: str
